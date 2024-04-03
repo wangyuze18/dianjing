@@ -52,9 +52,9 @@ def setDefaultOpts(A, At, f, gradf, g, proxg, x0, opts: fastaOpts):
         opts.tau = (2 / opts.L) / 10
 
     if (opts.tau is None) or (opts.tau <= 0):
-        opts.tau = 1 / opts.L
+        opts.tau = 1.0 / opts.L
     else:
-        opts.L = 1 / opts.tau
+        opts.L = 1.0 / opts.tau
 
     # stopping rule terminates when the relative residual gets small.
     if opts.stopNow is None:
@@ -118,6 +118,7 @@ def fasta(A, At, f, gradf, g, proxg, x0, opts: fastaOpts):
     # Handle non-monotonicity
     maxResidual = -torch.inf  # Stores the maximum value of the residual that has been seen. Used to evaluate stopping conditions.
     minObjectiveValue = torch.inf  # Stores the best objective value that has been seen. Used to return best iterate, rather than last iterate
+    bestObjectiveIterate = x0
 
     if opts.recordObjective:
         objective[0] = f1 + g(x0)
@@ -141,7 +142,7 @@ def fasta(A, At, f, gradf, g, proxg, x0, opts: fastaOpts):
             M = torch.max(fVals[max(i - w, 0):max(i, 1)])  # Get largest of last w values of 'f'
             backtrackCount = 0
             # Note: 1e-12 is to quench rounding errors
-            while (f1 - 1e-12 > M + Dx * gradf0 + torch.norm(Dx) ** 2 / (2 * tau0)) and (backtrackCount < 20):
+            while (f1 - 1e-12 > M + Dx.T @ gradf0 + torch.norm(Dx) ** 2 / (2 * tau0)) and (backtrackCount < 20):
                 # The backtracking loop
                 tau0 *= opts.stepSizeShrink  # shrink stepSize
                 x1_hat = x0 - tau0 * gradf0  # redo the FBS
@@ -216,7 +217,7 @@ def fasta(A, At, f, gradf, g, proxg, x0, opts: fastaOpts):
             gradf1 = At(gradf(d1))
             # Delta_g, note that Delta_x was recorded above during backtracking
             Dg = gradf1 + (x1_hat - x0) / tau0
-            dotprod = torch.real(Dx * Dg)
+            dotprod = torch.real((Dx * Dg).sum())
             tau_s = torch.norm(Dx) ** 2 / dotprod  # First BB stepsize rule
             tau_m = dotprod / torch.norm(Dg) ** 2  # Alternate BB stepsize rule
             tau_m = max(tau_m, 0)

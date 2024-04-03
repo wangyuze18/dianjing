@@ -1,9 +1,7 @@
 import torch
-import torch.nn as nn
-from fasta import *
+from demo.algorithms.fasta import *
 
 __all__ = ['prdeep', 'ProxOpts']
-
 
 class ProxOpts:
     def __init__(self, width, height, denoiser, prox_iters, sigma_w, lb, device="cpu"):

@@ -5,7 +5,7 @@ import time
 
 
 def estimate_Rfactor(mag, x_mag):
-    Rfactor = torch.sum(torch.abs(mag * temp_R - x_mag * temp_R)) / mag.sum()
+    Rfactor = torch.sum(torch.abs(mag[temp_R] - x_mag[temp_R])) / mag.sum()
     return Rfactor
 
 
@@ -50,6 +50,7 @@ def hio(
 
         if verbose:
             R = estimate_Rfactor(mag, torch.abs(x_hat))
+            R = R.cpu()
             R_hist[i] = R
             print(f'HIO step {i + 1} of {steps} Rfactor: {R}')
 
@@ -200,16 +201,17 @@ def charge_flipping(
 
 
 def apply_dynamic_support_constraints(y, percent):
-    size = y.size
-    support_num = round(size * (1 - percent))
-    ima_array = y.flatten()
-    indices = np.argpartition(ima_array, support_num - 1)
-    thresold = ima_array[indices[support_num - 1]]
-    flip = (y < thresold)
+    absy = torch.real(y)
+    size = absy.numel()
+    support_num = round(size * percent)
+    ima_array = absy.flatten()
+    values, indices = torch.topk(ima_array, support_num)
+    thresold = ima_array[indices[-1]]
+    flip = (absy < thresold)
     return flip
 
 
-def solver(ima, sol, verbose=True):
+def solver(ima, sol, device="cpu", verbose=True):
     """
         solver of three algorithms include chargeflip(CF),hio(HIO),error_reduction(ER)
 
@@ -243,6 +245,9 @@ def solver(ima, sol, verbose=True):
     y_hat = mag * np.exp(1j * phase)  # replace with known fourier modulus (diffracted intensities)
     y_hat[temp_0] = x_hat[temp_0]  # use the current (000) beam
     y = np.real(np.fft.ifftn(y_hat))  # next estimate of image.
+
+    mag = torch.from_numpy(mag).to(device=device)
+    y = torch.from_numpy(y).to(device=device)
     Rhist = None
     if verbose:
         Rhist = []
@@ -255,5 +260,5 @@ def solver(ima, sol, verbose=True):
             y, r = error_reduction(mag=mag, percent=sol_percent, x_init=y, steps=sol_steps)
         if verbose:
             Rhist.extend(r)
-
+    y = y.cpu().numpy()
     return y, Rhist
